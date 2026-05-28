@@ -1,0 +1,16 @@
+from dotenv import load_dotenv
+import os
+from datetime import datetime
+
+load_dotenv()
+
+PIPELINE_LOGS_PATH=os.getenv("PIPELINE_LOGS_PATH")
+CACHE_PATH=os.getenv("CACHE_PATH")
+RAW_DATA_PATH=os.getenv("RAW_DATA_PATH")
+PROCESSED_DATA_PATH=os.getenv("PROCESSED_DATA_PATH")
+YEAR=2024
+ROUND=1
+SESSION='R'
+WHEREHOUSE_PATH=os.getenv("WHEREHOUSE_PATH")
+ANALYSIS_PATH=os.getenv("ANALYSIS_PATH")
+VALIDATION_PATH=os.getenv("VALIDATION_PATH")
