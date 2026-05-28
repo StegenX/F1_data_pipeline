@@ -75,7 +75,7 @@ f1-data-pipeline/
 
 ### Step 1: Clone the Repository
 ```bash
-cd /home/stegen/Desktop/python/f1-data-pipeline
+cd f1-data-pipeline
 ```
 
 ### Step 2: Set Up Environment Variables
