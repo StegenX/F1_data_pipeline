@@ -1,5 +1,5 @@
 import pandas as pd
-import duckdb
+from google.cloud import bigquery
 import logging
 import config
 import fastf1
@@ -12,15 +12,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def create_connection(db_path: str) -> duckdb.DuckDBPyConnection:
+def create_connection() -> bigquery.Client:
     try:
-        logger.info("Creating connection with duckdb")
-        conn = duckdb.connect(database=db_path, read_only=False)
-        logger.info("Connection with duckdb succeded")
-
-        return conn
+        logger.info("Creating connection with BigQuery")
+        client = bigquery.Client(project=config.BIGQUERY_PROJECT)
+        logger.info("Connection with BigQuery succeeded")
+        return client
     except Exception as e:
-        logger.error(f'Error while trying to connect to duckdb: {e}')
+        logger.error(f'Error while trying to connect to BigQuery: {e}')
         raise
 
 def get_event_df(event: fastf1.events.Event) -> pd.DataFrame:
@@ -37,99 +36,217 @@ def get_event_df(event: fastf1.events.Event) -> pd.DataFrame:
         logger.error(f'Error while extracting data from event object: {e}')
         raise
 
-def create_schema(conn: duckdb.DuckDBPyConnection):
+def define_schemas() -> dict:
+    DIM_DRIVERS_SCHEMA = [
+        bigquery.SchemaField("DriverId", "STRING", mode="REQUIRED", description="Primary Key for the driver"),
+        bigquery.SchemaField("Abbreviation", "STRING", mode="NULLABLE"),
+        bigquery.SchemaField("FirstName", "STRING", mode="NULLABLE"),
+        bigquery.SchemaField("LastName", "STRING", mode="NULLABLE"),
+        bigquery.SchemaField("FullName", "STRING", mode="NULLABLE"),
+        bigquery.SchemaField("CountryCode", "STRING", mode="NULLABLE"),
+        bigquery.SchemaField("DriverNumber", "INT64", mode="NULLABLE"),
+    ]
+
+    DIM_CONSTRUCTORS_SCHEMA = [
+        bigquery.SchemaField("TeamId", "STRING", mode="REQUIRED", description="Primary Key for the constructor/team"),
+        bigquery.SchemaField("TeamName", "STRING", mode="NULLABLE"),
+    ]
+
+    DIM_CIRCUITS_SCHEMA = [
+        bigquery.SchemaField("circuit_id", "STRING", mode="REQUIRED", description="Primary Key for the circuit"),
+        bigquery.SchemaField("circuit_name", "STRING", mode="NULLABLE"),
+        bigquery.SchemaField("country", "STRING", mode="NULLABLE"),
+        bigquery.SchemaField("location", "STRING", mode="NULLABLE"),
+    ]
+
+    FACT_RACE_RESULTS_SCHEMA = [
+        bigquery.SchemaField("result_id", "STRING", mode="REQUIRED", description="Primary Key for race results"),
+        bigquery.SchemaField("DriverId", "STRING", mode="REQUIRED", description="FK to dim_drivers"),
+        bigquery.SchemaField("TeamId", "STRING", mode="REQUIRED", description="FK to dim_constructors"),
+        bigquery.SchemaField("circuit_id", "STRING", mode="REQUIRED", description="FK to dim_circuits"),
+        bigquery.SchemaField("year", "INT64", mode="NULLABLE"),
+        bigquery.SchemaField("round_number", "INT64", mode="NULLABLE"),
+        bigquery.SchemaField("Position", "INT64", mode="NULLABLE"),
+        bigquery.SchemaField("GridPosition", "INT64", mode="NULLABLE"),
+        bigquery.SchemaField("Points", "INT64", mode="NULLABLE"),
+        bigquery.SchemaField("Laps", "INT64", mode="NULLABLE"),
+        bigquery.SchemaField("race_time_seconds", "FLOAT64", mode="NULLABLE"), 
+        bigquery.SchemaField("gap_to_winner_seconds", "FLOAT64", mode="NULLABLE"),
+        bigquery.SchemaField("Status", "STRING", mode="NULLABLE"),
+        bigquery.SchemaField("ClassifiedPosition", "STRING", mode="NULLABLE"),
+        bigquery.SchemaField("is_classified", "BOOLEAN", mode="NULLABLE"), 
+        bigquery.SchemaField("session_type", "STRING", mode="NULLABLE"),
+    ]
+
+    FACT_LAP_TIMES_SCHEMA = [
+        bigquery.SchemaField("lap_id", "STRING", mode="REQUIRED", description="Primary Key for lap times"),
+        bigquery.SchemaField("DriverId", "STRING", mode="REQUIRED", description="FK to dim_drivers"),
+        bigquery.SchemaField("circuit_id", "STRING", mode="REQUIRED", description="FK to dim_circuits"),
+        bigquery.SchemaField("year", "INT64", mode="NULLABLE"),
+        bigquery.SchemaField("round_number", "INT64", mode="NULLABLE"),
+        bigquery.SchemaField("lap_number", "INT64", mode="NULLABLE"),
+        bigquery.SchemaField("stint", "INT64", mode="NULLABLE"),
+        bigquery.SchemaField("lap_time_seconds", "FLOAT64", mode="NULLABLE"),
+        bigquery.SchemaField("sector1_seconds", "FLOAT64", mode="NULLABLE"),
+        bigquery.SchemaField("sector2_seconds", "FLOAT64", mode="NULLABLE"),
+        bigquery.SchemaField("sector3_seconds", "FLOAT64", mode="NULLABLE"),
+        bigquery.SchemaField("speedI1", "FLOAT64", mode="NULLABLE"),
+        bigquery.SchemaField("speedI2", "FLOAT64", mode="NULLABLE"),
+        bigquery.SchemaField("speedFl", "FLOAT64", mode="NULLABLE"),
+        bigquery.SchemaField("speedSt", "FLOAT64", mode="NULLABLE"),
+        bigquery.SchemaField("compound", "STRING", mode="NULLABLE"),
+        bigquery.SchemaField("tyre_life", "INT64", mode="NULLABLE"),
+        bigquery.SchemaField("fresh_tyre", "BOOLEAN", mode="NULLABLE"),
+        bigquery.SchemaField("is_pit_lap", "BOOLEAN", mode="NULLABLE"),
+        bigquery.SchemaField("is_valid_lap", "BOOLEAN", mode="NULLABLE"),
+        bigquery.SchemaField("is_personal_best", "BOOLEAN", mode="NULLABLE"),
+        bigquery.SchemaField("Position", "INT64", mode="NULLABLE"),
+        bigquery.SchemaField("track_status", "STRING", mode="NULLABLE"),
+        bigquery.SchemaField("session_type", "STRING", mode="NULLABLE"),
+    ]
+
+    return {
+        "dim_drivers": DIM_DRIVERS_SCHEMA,
+        "dim_constructors": DIM_CONSTRUCTORS_SCHEMA,
+        "dim_circuits": DIM_CIRCUITS_SCHEMA,
+        "fact_race_results": FACT_RACE_RESULTS_SCHEMA,
+        "fact_lap_times": FACT_LAP_TIMES_SCHEMA
+    }
+
+def create_schemas(client: bigquery.Client):
     try:
-        creating_tables_query = """ CREATE TABLE IF NOT EXISTS dim_drivers (driver_id VARCHAR PRIMARY KEY,
-                                    abbreviation VARCHAR, first_name VARCHAR, last_name VARCHAR, full_name VARCHAR,
-                                    country_code VARCHAR, driver_number int);
-                                    
-                                    CREATE TABLE IF NOT EXISTS dim_constructors (team_id VARCHAR PRIMARY KEY,
-                                    team_name VARCHAR);
-
-                                    CREATE TABLE IF NOT EXISTS dim_circuits (circuit_id VARCHAR PRIMARY KEY,
-                                    circuit_name VARCHAR, country VARCHAR, location VARCHAR);
-
-                                    CREATE TABLE IF NOT EXISTS fact_race_results(result_id VARCHAR PRIMARY KEY,
-                                    driver_id VARCHAR REFERENCES dim_drivers(driver_id), team_id VARCHAR REFERENCES dim_constructors(team_id),
-                                    circuit_id VARCHAR REFERENCES dim_circuits(circuit_id), year INT, round_number INT, position INT,
-                                    grid_position INT, points INT, laps INT, race_time_seconds DOUBLE, gap_to_winner_seconds DOUBLE,
-                                    status VARCHAR, ClassifiedPosition VARCHAR, is_classified BOOLEAN, session_type VARCHAR);
-
-                                    CREATE TABLE IF NOT EXISTS fact_lap_times (lap_id VARCHAR PRIMARY KEY,
-                                    driver_id VARCHAR REFERENCES dim_drivers(driver_id), circuit_id VARCHAR REFERENCES dim_circuits(circuit_id),
-                                    year INT, round_number INT, lap_number INT, stint INT, lap_time_seconds DOUBLE,
-                                    sector1_seconds DOUBLE, sector2_seconds DOUBLE, sector3_seconds DOUBLE,
-                                    speedI1 DOUBLE, speedI2 DOUBLE, speedFl DOUBLE, speedSt DOUBLE,
-                                    compound VARCHAR, tyre_life INT, fresh_tyre BOOLEAN, is_pit_lap BOOLEAN,
-                                    is_valid_lap BOOLEAN, is_personal_best BOOLEAN, position INT, track_status VARCHAR, session_type VARCHAR)
-                                    """
         logger.info("Creating tables schemas...")
+        F1_TABLES_BLUEPRINT = define_schemas()
+ 
+        for table_name, schema in F1_TABLES_BLUEPRINT.items():
+            table_id = f"{config.BIGQUERY_PROJECT}.{config.BIGQUERY_DATASET}.{table_name}"
+            table_blueprint = bigquery.Table(table_id, schema=schema)
 
-        conn.execute(creating_tables_query)
+            if table_name == 'fact_lap_times':
+                table_blueprint.clustering_fields = ['DriverId', 'year', 'round_number']
+            elif table_name == 'fact_race_results':
+                table_blueprint.clustering_fields = ['year', 'round_number']
+            
+            try:
+                client.create_table(table_blueprint, exists_ok=True)
+                logger.info(f"{table_name} table verified/created successfully...")
+            except Exception as e:
+                logger.error(f"{table_name} table creation failed: {e}")
+                raise
 
-        logger.info("Tables schemas created successfully...")
+        logger.info("Tables schemas processing routine closed...")
     except Exception as e:
         logger.error(f'Error while creating schemas: {e}')
         raise
 
-def load_results(conn, results_df, event):
+def load_results(client: bigquery.Client, results_df, event, year: int, round_number: int):
     try:
-        logger.info("loading results schema...")
-        dim_driver_tb_columns = ['driver_id', 'abbreviation' , 'first_name' , 'last_name' , 'full_name' , 'country_code' , 'driver_number']
-        dim_constructors = ['team_id', 'team_name']
-        dim_circuits_tb_columns = ['circuit_id', 'circuit_name', 'country', 'location']
-        fact_race_results_tb_columns = ['result_id', 'driver_id', 'team_id', 'circuit_id', 'year', 'round_number', 'position', 'grid_position', 'points', 'laps', 'race_time_seconds', 'gap_to_winner_seconds', 'status', 'ClassifiedPosition', 'is_classified', 'session_type']
-
-        dim_drivers_columns = ['DriverId', 'Abbreviation', 'FirstName', 'LastName', 'FullName', 'CountryCode', 'DriverNumber']
-        dim_constructors_columns = ['TeamId', 'TeamName']
-        dim_circuits_columns = ['circuit_id', 'circuit_name', 'country', 'location']
-        fact_results_columns = ['result_id', 'DriverId', 'TeamId', 'circuit_id', 'year', 'round_number', 'Position', 'GridPosition', 'Points',
-                                'Laps', 'race_time_seconds', 'gap_to_winner_seconds', 'Status', 'ClassifiedPosition', 'is_classified',
-                                'session_type']
-
-        
-
+        logger.info(f"Loading results data for Year: {year}, Round: {round_number}...")
+       
+        F1_SCHEMAS = define_schemas()
         event_df = get_event_df(event)
+
+        logger.info("Evicting any existing race result rows for idempotency...")
+        query = f"""
+            SELECT COUNT(*) as count 
+            FROM `{config.BIGQUERY_PROJECT}.{config.BIGQUERY_DATASET}.fact_race_results`
+            WHERE year = {year} AND round_number = {round_number}
+        """
+        result = client.query(query).result()
+        count = list(result)[0].count
+        if count > 0:
+            logger.warning(f"Data for year {year} round {round_number} already exists — skipping load")
+            return
+
         merged_fact_table = results_df.merge(event_df, how='cross')
 
+        for table_name, schema in F1_SCHEMAS.items():
+            if table_name == "fact_lap_times":
+                continue
 
-        conn.register("event_df", event_df)
-        conn.register("results_df", results_df)
-        conn.register("merged_fact_table", merged_fact_table)
-        conn.execute(f"""INSERT INTO dim_drivers ({', '.join(dim_driver_tb_columns)}) SELECT {', '.join(dim_drivers_columns)} FROM results_df ON CONFLICT DO NOTHING;""")
-        conn.execute(f"""INSERT INTO dim_constructors ({', '.join(dim_constructors)}) SELECT {', '.join(dim_constructors_columns)} FROM results_df ON CONFLICT DO NOTHING;""")
-        conn.execute(f"""INSERT INTO dim_circuits ({', '.join(dim_circuits_tb_columns)}) SELECT {', '.join(dim_circuits_columns)} FROM event_df ON CONFLICT DO NOTHING;""")
-        conn.execute(f""" INSERT INTO fact_race_results ({', '.join(fact_race_results_tb_columns)}) SELECT {', '.join(fact_results_columns)} FROM merged_fact_table ON CONFLICT DO NOTHING;""")
+            table_destination = f"{config.BIGQUERY_PROJECT}.{config.BIGQUERY_DATASET}.{table_name}"
+            columns = [field.name for field in schema]
 
-        logger.info("Results schema loaded successfully...")
+            if table_name in ["dim_drivers", "dim_constructors"]:
+                dataframe_source = results_df[columns].drop_duplicates()
+            elif table_name == "dim_circuits":
+                dataframe_source = event_df[columns].drop_duplicates()
+            else:
+                dataframe_source = merged_fact_table[columns]
+
+            job = client.load_table_from_dataframe(
+                dataframe=dataframe_source,
+                destination=table_destination,
+                job_config=bigquery.LoadJobConfig(
+                    schema=schema,
+                    write_disposition="WRITE_APPEND"
+                )
+            )
+            job.result()
+            logger.info(f"{table_name} data loaded successfully")
+
+        logger.info("Results elements batch processed safely...")
     except Exception as e:
-        logger.error(f'Error while loading results schema: {e}')
+        logger.error(f'Error while loading results data: {e}')
         raise
 
-def load_laps(conn, laps_df, results_df, event):
+def load_laps(client: bigquery.Client, laps_df, results_df, event, year: int, round_number: int):
     try:
-        logger.info("loading laps schema...")
+        logger.info(f"Loading laps data for Year: {year}, Round: {round_number}...")
 
-        laps_columns = ['lap_id', 'DriverId', 'circuit_id', 'year','round_number', 'LapNumber', 'Stint', 'LapTime_seconds',
-                        'Sector1Time_seconds', 'Sector2Time_seconds', 'Sector3Time_seconds',
-                        'SpeedI1', 'SpeedI2', 'SpeedFL', 'SpeedST', 'Compound', 'TyreLife',
-                        'FreshTyre', 'is_pit_lap','is_valid_lap', 'IsPersonalBest', 'Position', 'TrackStatus', 'session_type']
-        fact_lap_times_tb_columns = ['lap_id', 'driver_id', 'circuit_id', 'year', 'round_number', 'lap_number', 'stint', 'lap_time_seconds', 'sector1_seconds', 'sector2_seconds', 'sector3_seconds', 'speedI1', 'speedI2', 'speedFl', 'speedSt', 'compound', 'tyre_life', 'fresh_tyre', 'is_pit_lap', 'is_valid_lap', 'is_personal_best', 'position', 'track_status', 'session_type']
-    
+        F1_SCHEMAS = define_schemas()
+        schema = F1_SCHEMAS["fact_lap_times"]
+        columns_source = [
+            'lap_id', 'DriverId', 'circuit_id', 'year', 'round_number', 
+            'LapNumber', 'Stint', 'LapTime_seconds', 'Sector1Time_seconds', 
+            'Sector2Time_seconds', 'Sector3Time_seconds', 'SpeedI1', 'SpeedI2', 
+            'SpeedFL', 'SpeedST', 'Compound', 'TyreLife', 'FreshTyre', 
+            'is_pit_lap', 'is_valid_lap', 'IsPersonalBest', 'Position', 
+            'TrackStatus', 'session_type'
+        ]
         
+        table_destination = f"{config.BIGQUERY_PROJECT}.{config.BIGQUERY_DATASET}.fact_lap_times"
+            
         event_df = get_event_df(event)
         circuit_id = event_df["circuit_id"].iloc[0]
         laps_df["circuit_id"] = circuit_id
-        laps_df = laps_df.merge(results_df[["DriverNumber", "DriverId"]], how='left')
         
-        conn.register("laps_df", laps_df)
-        conn.execute(f""" INSERT INTO fact_lap_times ({', '.join(fact_lap_times_tb_columns)}) SELECT {', '.join(laps_columns)} FROM laps_df ON CONFLICT DO NOTHING""")
+        laps_df = laps_df.merge(results_df[["DriverNumber", "DriverId"]], how='left')
 
-        logger.info("Laps schema loaded successfully...")
+        logger.info("Evicting any existing lap records for idempotency...")
+        query = f"""
+            SELECT COUNT(*) as count 
+            FROM `{config.BIGQUERY_PROJECT}.{config.BIGQUERY_DATASET}.fact_lap_times`
+            WHERE year = {year} AND round_number = {round_number}
+        """
+        result = client.query(query).result()
+        count = list(result)[0].count
+        if count > 0:
+            logger.warning(f"Data for year {year} round {round_number} already exists — skipping load")
+            return
+        
+        for col in columns_source:
+            if col not in laps_df.columns:
+                laps_df[col] = None
+
+
+        sliced_laps_df = laps_df[columns_source].copy()
+        sliced_laps_df.columns = [field.name for field in schema]
+
+        fact_job = client.load_table_from_dataframe(
+            dataframe=sliced_laps_df,
+            destination=table_destination,
+            job_config=bigquery.LoadJobConfig(
+                schema=schema,
+                write_disposition="WRITE_APPEND"
+            )
+        )
+        fact_job.result()
+
+        logger.info("Laps data loaded successfully...")
     except Exception as e:
-        logger.error(f"Error while loading laps: {e}")
+        logger.error(f"Error while loading laps data: {e}")
         raise
-
 
 if __name__ == "__main__":
     try:
@@ -140,19 +257,15 @@ if __name__ == "__main__":
         laps_df = pd.read_parquet(f"{config.PROCESSED_DATA_PATH}/laps_{config.YEAR}_{config.SESSION}{config.ROUND}.parquet")
         event = extract_race_event(year=config.YEAR, round_number=config.ROUND)
 
-        conn = create_connection(config.WHEREHOUSE_PATH)
+        client = create_connection()
+        create_schemas(client)
 
-        create_schema(conn)
-
-
-        load_results(conn, results_df, event)
-        load_laps(conn, laps_df, results_df, event)
+        load_results(client, results_df, event, year=int(config.YEAR), round_number=int(config.ROUND))
+        load_laps(client, laps_df, results_df, event, year=int(config.YEAR), round_number=int(config.ROUND))
 
         print("Loading phase completed successfully...")
         logger.info("Loading phase completed successfully...")
     except Exception as e:
         print("Load phase failed, check logs...")
         logger.error(f'Load phase failed: {e}')
-    finally:
-        if 'conn' in locals():
-            conn.close()
+        raise
