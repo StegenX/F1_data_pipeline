@@ -38,7 +38,8 @@ def transform_results(results_df, year, round_number, session_type) -> pd.DataFr
     try:
         logger.info("Results transfomation started...")
         results_df = results_df.drop(columns=["HeadshotUrl", "BroadcastName", "TeamColor", "Q1", "Q2", "Q3"])
-        results_df[["Position", "GridPosition", "Points", "Laps"]] = results_df[["Position", "GridPosition", "Points", "Laps"]].astype("Int64")
+        #int_cols = ["DriverNumber", "Position", "GridPosition", "Points", "Laps", "year", "round_number"]
+        results_df[["DriverNumber", "Position", "GridPosition", "Points", "Laps"]] = results_df[["DriverNumber", "Position", "GridPosition", "Points", "Laps"]].astype("Int64")
         results_df["Time"] = results_df["Time"].dt.total_seconds()
         results_df = results_df.rename(columns={"Time": "race_time_seconds"})
         numeric = pd.to_numeric(results_df["ClassifiedPosition"], errors='coerce')
@@ -67,9 +68,10 @@ def transform_results(results_df, year, round_number, session_type) -> pd.DataFr
 def transform_laps(laps_df, year, round_number, session_type):
     try:
         logger.info("Laps transformation started...")
+        #lap_int_cols = ["year", "round_number", "LapNumber", "Stint", "TyreLife", "Position"]
 
         laps_df = laps_df.drop(columns=["Sector1SessionTime", "Sector2SessionTime", "Sector3SessionTime", "FastF1Generated", "LapStartTime"])
-        laps_df[["LapNumber", "Stint", "TyreLife"]] = laps_df[["LapNumber", "Stint", "TyreLife"]].astype("Int64")
+        laps_df[["DriverNumber", "LapNumber", "Stint", "TyreLife", "Position"]] = laps_df[["DriverNumber", "LapNumber", "Stint", "TyreLife", "Position"]].astype("Int64")
         time_columns = ["LapTime", "Sector1Time", "Sector2Time", "Sector3Time"]
         laps_df[time_columns] = laps_df[time_columns].apply(lambda x: x.dt.total_seconds())
         laps_df = laps_df.rename(columns=lambda x: f'{x}_seconds' if x in time_columns else x)
