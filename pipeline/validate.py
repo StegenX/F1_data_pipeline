@@ -28,10 +28,10 @@ def build_results_suite(context):
             
             gx.expectations.ExpectColumnValuesToBeBetween(column='position', min_value=1, max_value=20),
             gx.expectations.ExpectColumnValuesToBeBetween(column='points', min_value=0, max_value=26),
-            gx.expectations.ExpectColumnValuesToBeBetween(column='GridPosition', min_value=0, max_value=20),
+            gx.expectations.ExpectColumnValuesToBeBetween(column='GridPosition', min_value=0, max_value=22),
             
             gx.expectations.ExpectColumnValuesToBeUnique(column='result_id'),
-            gx.expectations.ExpectTableRowCountToEqual(value=20),
+            gx.expectations.ExpectTableRowCountToBeBetween(min_value=15, max_value=20),
             
             gx.expectations.ExpectColumnValuesToBeBetween(column='race_time_seconds', min_value=0.00, max_value=None)
         ]

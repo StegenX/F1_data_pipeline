@@ -166,7 +166,7 @@ def load_results(client: bigquery.Client, results_df, event, year: int, round_nu
 
             table_destination = f"{config.BIGQUERY_PROJECT}.{config.BIGQUERY_DATASET}.{table_name}"
             columns = [field.name for field in schema]
-
+            write_disposition = "WRITE_TRUNCATE" if table_name.startswith("dim_") else "WRITE_APPEND"
             if table_name in ["dim_drivers", "dim_constructors"]:
                 dataframe_source = results_df[columns].drop_duplicates()
             elif table_name == "dim_circuits":
@@ -179,7 +179,7 @@ def load_results(client: bigquery.Client, results_df, event, year: int, round_nu
                 destination=table_destination,
                 job_config=bigquery.LoadJobConfig(
                     schema=schema,
-                    write_disposition="WRITE_APPEND"
+                    write_disposition=write_disposition
                 )
             )
             job.result()

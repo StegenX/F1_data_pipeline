@@ -22,3 +22,5 @@ logs/
 token.txt
 
 cache/
+
+credentials.json
