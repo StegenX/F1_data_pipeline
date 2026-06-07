@@ -6,6 +6,7 @@ import config
 
 fastf1.Cache.enable_cache(config.CACHE_PATH)
 
+
 logging.basicConfig(
     filename=config.PIPELINE_LOGS_PATH,
     level=logging.INFO,
@@ -31,7 +32,7 @@ def extract_results(session: object, year: int, round_number: int, session_type:
     try:
         logger.info("Results dataframe extraction started...")
         results_df =  pd.DataFrame(session.results)
-        results_df.to_parquet(f'{config.RAW_DATA_PATH}/results_{year}_{session_type}{round_number}.parquet', index=False)
+        # results_df.to_parquet(f'{config.RAW_DATA_PATH}/results_{year}_{session_type}{round_number}.parquet', index=False)
         logger.info(f'Results dataframe extracted successfully,{results_df.shape[0]} row/s saved in /raw/results_{year}_{session_type}{round_number}.parquet')
 
         return results_df
@@ -43,7 +44,7 @@ def extract_laps(session: object, year: int, round_number: int, session_type: st
     try:
         logger.info("laps dataframe extraction started...")
         laps_df =  pd.DataFrame(session.laps)
-        laps_df.to_parquet(f'{config.RAW_DATA_PATH}/laps_{year}_{session_type}{round_number}.parquet', index=False)
+        # laps_df.to_parquet(f'{config.RAW_DATA_PATH}/laps_{year}_{session_type}{round_number}.parquet', index=False)
         logger.info(f'Laps dataframe extracted successfully,{laps_df.shape[0]} row/s saved in /raw/laps_{year}_{session_type}{round_number}.parquet')
 
         return laps_df
