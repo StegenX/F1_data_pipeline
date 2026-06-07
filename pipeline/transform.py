@@ -34,12 +34,21 @@ def save_dataframe(dataframe: pd.DataFrame,file_name: str):
         logger.error(f"Error while trying to save dataframe: {e}")
         raise 
 
-def transform_results(results_df, year, round_number, session_type) -> pd.DataFrame:
+def transform_results(results_df: pd.DataFrame, year, round_number, session_type) -> pd.DataFrame:
     try:
         logger.info("Results transfomation started...")
         results_df = results_df.drop(columns=["HeadshotUrl", "BroadcastName", "TeamColor", "Q1", "Q2", "Q3"])
-        #int_cols = ["DriverNumber", "Position", "GridPosition", "Points", "Laps", "year", "round_number"]
-        results_df[["DriverNumber", "Position", "GridPosition", "Points", "Laps"]] = results_df[["DriverNumber", "Position", "GridPosition", "Points", "Laps"]].astype("Int64")
+        group_id = results_df["Position"].notna().cumsum()
+        increment = results_df.groupby(group_id).cumcount()
+        results_df["Position"] = results_df["Position"].ffill() + increment
+        int_cols = ["DriverNumber", "Position", "GridPosition", "Points", "Laps"]
+        for col in int_cols:
+            results_df[col] = pd.to_numeric(results_df[col], errors="coerce")
+
+        if "Points" in results_df.columns:
+            results_df["Points"] = results_df["Points"] // 1
+        results_df[int_cols] = results_df[int_cols].astype("Int64")
+    
         results_df["Time"] = results_df["Time"].dt.total_seconds()
         results_df = results_df.rename(columns={"Time": "race_time_seconds"})
         numeric = pd.to_numeric(results_df["ClassifiedPosition"], errors='coerce')
@@ -54,7 +63,7 @@ def transform_results(results_df, year, round_number, session_type) -> pd.DataFr
         )
         results_df["result_id"] = results_df["year"].astype(str) + "_" + results_df["round_number"].astype(str) + "_" + results_df["DriverNumber"].astype(str)
 
-        save_dataframe(results_df, f'results_{year}_{session_type}{round_number}')
+        # save_dataframe(results_df, f'results_{year}_{session_type}{round_number}')
 
         logger.info(f"Results transformation completed successfully, {results_df.shape[0]} row/s and {results_df.shape[1]} column/s left")
         # print(list(results_df.columns))
@@ -86,7 +95,7 @@ def transform_laps(laps_df, year, round_number, session_type):
         )
 
         laps_df["lap_id"] = laps_df["year"].astype(str) + "_" + laps_df["round_number"].astype(str) + "_" + laps_df["Driver"] + "_" + laps_df["LapNumber"].astype(str)
-        save_dataframe(laps_df, f'laps_{year}_{session_type}{round_number}')
+        # save_dataframe(laps_df, f'laps_{year}_{session_type}{round_number}')
 
         logger.info(f"Laps transformation completed successfully, {laps_df.shape[0]} row/s and {laps_df.shape[1]} column/s left")
         # print(list(laps_df.columns))
