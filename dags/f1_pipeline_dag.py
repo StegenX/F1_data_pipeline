@@ -11,7 +11,7 @@ import pandas as pd
 
 from pipeline.extract import extract_race_session, extract_results, extract_laps, extract_race_event
 from pipeline.transform import get_dataframe, transform_results, transform_laps
-from pipeline.load import create_connection, create_schema, load_results, load_laps
+from pipeline.load import create_connection, create_schemas, load_results, load_laps
 from pipeline.analyze import analyze_race_results, analyze_lap_consistency, analyze_tyre_strategy, analyze_position_vs_grid, analyze_constructor_points
 from pipeline.validate import validate_laps, validate_results, generate_validation_report
 
@@ -173,7 +173,7 @@ with DAG(
     dag_id='f1_pipeline',
     default_args=default_args,
     schedule_interval='0 0 * * 1',
-    start_date=datetime.datetime(2026, 5, 1),
+    start_date=datetime.datetime(2026, 7, 1),
     max_active_runs=1,
     catchup=False,
 ) as dag:
