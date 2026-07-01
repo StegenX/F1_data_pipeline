@@ -1,13 +1,13 @@
 import fastf1
-import config
+from pipeline import config
 import logging
 import time
 import json
 
-from extract import extract_laps, extract_race_event, extract_race_session, extract_results
-from transform import transform_laps, transform_results
-from validate import validate_results, validate_laps, generate_validation_report
-from load import load_results, load_laps, create_connection, create_schemas
+from pipeline.extract import extract_laps, extract_race_event, extract_race_session, extract_results
+from pipeline.transform import transform_laps, transform_results
+from pipeline.validate import validate_results, validate_laps, generate_validation_report
+from pipeline.load import load_results, load_laps, create_connection, create_schemas
 
 logging.basicConfig(
     filename=config.PIPELINE_LOGS_PATH,
@@ -85,17 +85,18 @@ def load_historical(start_year, end_year):
 
         client = create_connection()
         create_schemas(client)
+        year = 2026
 
-        for year in range(start_year, end_year + 1):
+        # for year in range(start_year, end_year + 1):
         
-            try:
+        try:
                 rounds = get_season_rounds(year)
                 logger.info(f"📅 Found {len(rounds)} rounds for the {year} season.")
-            except Exception as e:
+        except Exception as e:
                 logger.error(f"❌ Failed to fetch schedule for {year}. Skipping year. Error: {e}")
-                continue
+                # continue
 
-            for round_number in rounds:
+        for round_number in rounds:
                 race_tag = f"{year} Round {round_number}"
                 
                 try:

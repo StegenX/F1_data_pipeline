@@ -1,9 +1,9 @@
 import pandas as pd
 from google.cloud import bigquery
 import logging
-import config
+from pipeline import config
 import fastf1
-from extract import extract_race_event
+from pipeline.extract import extract_race_event
 
 logging.basicConfig(
     filename=config.PIPELINE_LOGS_PATH,

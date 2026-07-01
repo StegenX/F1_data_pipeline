@@ -1,7 +1,7 @@
 import pandas as pd
 import logging
 import fastf1
-import config
+from pipeline import config
 
 
 fastf1.Cache.enable_cache(config.CACHE_PATH)

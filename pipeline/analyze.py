@@ -1,7 +1,7 @@
 import pandas as pd
 import duckdb
 import logging
-import config
+from pipeline import config
 
 logging.basicConfig(
     filename=config.PIPELINE_LOGS_PATH,
